@@ -15,7 +15,9 @@ from segmentation_models import PSPNet, FPN, Linknet, Unet
 from segmentation_models.losses import jaccard_loss, dice_loss
 from segmentation_models.metrics import iou_score, f_score
 from keras.utils import to_categorical
-
+import threading
+import cartopy.crs as ccrs
+from mpl_toolkits.basemap import Basemap
 # from tensorflow.python import debug as tf_debug
 # sess = K.get_session()
 # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
@@ -26,11 +28,12 @@ from keras.utils import to_categorical
 
 # deeplab_model = Deeplabv3(input_shape=(277, 349, 5), classes=5, weights=None, backbone='mobilenetv2')
 # deeplab_model = PSPNet(backbone_name="resnext50", input_shape=(240, 336, 5), classes=5, activation='softmax', encoder_weights=None)
+
 deeplab_model = FPN(backbone_name="resnet34", input_shape=(256, 320, 5), classes=5, encoder_weights=None)
 
 optimizer = Adam(lr=5e-4)
 
-logdir = "/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomLogs/logs/FPN@Resnet34_RAM_Fat/"
+logdir = "/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomLogs/logs/FPN@Resnet34_Fat/"
 
 # class_weights = {  # on 100 km wide fronts
 #     0: 0.0031339743280361424,
@@ -61,7 +64,7 @@ def weighted_f_score(t, p):
     return f_score(t, p, class_weights=w)
 
 
-deeplab_model = keras.models.load_model("/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomLogs/logs/FPN@Resnet34_RAM_Fat/weights342-0.881963.hdf5",
+deeplab_model = keras.models.load_model("/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomLogs/logs/FPN@Resnet34_Fat/weights167-0.800797.hdf5",
                                         custom_objects={
                                             "weighted_jaccard_loss": weighted_jaccard_loss,
                                             "weighted_iou_score": weighted_iou_score,
@@ -121,75 +124,102 @@ def crop_boundaries(imgs):
     return imgs[:, boundaries['min_y']:boundaries['max_y'] + 1, boundaries['min_x']:boundaries['max_x'] + 1, :]
 
 
-filenames = ["air.2m.nc", "mslet.nc", "shum.2m.nc", "uwnd.10m.nc", "vwnd.10m.nc"]
+def crop_2d(inp):
+    return inp[boundaries['min_y']:boundaries['max_y'] + 1, boundaries['min_x']:boundaries['max_x'] + 1]
+
+
+# filenames = ["air.2m.nc", "mslet.nc", "shum.2m.nc", "uwnd.10m.nc", "vwnd.10m.nc"]
 varnames = ["air", "mslet", "shum", "uwnd", "vwnd"]
 # files = list(map(lambda x: "/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomData2/NARR/{}".format(x), filenames))
-files = list(map(lambda x: "./data/{}".format(x), filenames))
-truth_filename = "plotted_fronts_fat.nc"
+# files = list(map(lambda x: "./data/{}".format(x), filenames))
+filename = "/run/media/polikutin/Fast Data/NARR/narr_unc.nc"
+truth_filename = "/run/media/polikutin/Fast Data/NARR/plotted_fronts_fat.nc"
 
 
 def split_dates():
     import random
     random.seed(0)
-    with xr.open_dataset(truth_filename) as f, xr.open_dataset(files[0]) as f2:
+    with xr.open_dataset(truth_filename) as f, xr.open_dataset(filename) as f2:
         return train_test_split(list(set(f.time.values) & set(f2.time.values)), random_state=0, shuffle=True,
                                 test_size=0.2)
 
 
 class Dataset(keras.utils.Sequence):
-    def __init__(self, dates, filenames, varnames, truth_filename, batch_size):
+    def __init__(self, dates, filename, varnames, truth_filename, batch_size):
         self.dates = dates
-        self.filenames = filenames
+        self.filename = filename
         self.varnames = varnames
         self.truth_filename = truth_filename
-        self.files = None
+        self.file = None
         self.variables = None
         self.batch_size = batch_size
         self.len = int(math.ceil(len(dates) / batch_size))
+        self.lock = threading.Lock()
 
     def __enter__(self):
-        self.files = []
+        self.file = xr.open_dataset(self.filename, cache=False)
         self.variables = []
-        for f, v in zip(self.filenames, self.varnames):
-            self.files.append(xr.open_dataset(f, cache=False))
-            self.variables.append(self.files[-1][v])
+        for v in self.varnames:
+            self.variables.append(self.file[v])
         self.truth_file = xr.open_dataset(self.truth_filename, cache=False)
         self.truth_variable = self.truth_file.fronts
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        for f in self.files:
-            f.close()
+        self.file.close()
         self.truth_file.close()
 
     def __len__(self):
         return self.len
 
     def __getitem__(self, index):
-        dates = sorted(self.dates[index * self.batch_size:(index + 1) * self.batch_size])
-        # x = np.array([np.dstack([normalize(v.sel(time=d), v.name).fillna(0).values for v in self.variables]) for d in dates])
-        # y = to_categorical(np.array([self.truth_variable.sel(time=d).values[::-1, ::] for d in dates]))
-        x = np.concatenate(
-            [np.expand_dims(normalize(v.sel(time=dates).fillna(0).values, v.name), -1) for v in self.variables],
-            axis=-1)
-        y = to_categorical(self.truth_variable.sel(time=dates)[:, ::-1, :].values)
-        # if x.shape != (self.batch_size, 277, 349, 5):
-        #     raise Exception("What the fuck")
+        with self.lock:
+            dates = sorted(self.dates[index * self.batch_size:(index + 1) * self.batch_size])
+            x = np.concatenate(
+                [np.expand_dims(normalize(v.sel(time=dates), v.name).fillna(0).values, -1) for v in self.variables],
+                axis=-1)
+            y = to_categorical(self.truth_variable.sel(time=dates)[:, ::-1, :].values)
         x = crop_center(crop_boundaries(x), (len(dates), *in_size, 5))
         y = crop_center(crop_boundaries(y), (len(dates), *in_size, 5))
         return x, y
-        # np.array([np.dstack([crop_center(normalize(v.sel(time=d), v.name).fillna(0).values, (240, 336, 5)) for v in self.variables]) for d in dates]),\
-        # to_categorical(np.array([crop_center(self.truth_variable.sel(time=d).values, (240, 336))[::-1, ::] for d in dates]))
 
     def on_epoch_end(self):
         np.random.shuffle(self.dates)
 
 
-def plot_fronts(x, y):
-    plt.imshow(x[..., 0])
-    cmap = matplotlib.colors.ListedColormap([(0, 0, 0, 0), 'red', 'blue', 'green', 'purple'])
-    plt.imshow(y, cmap=cmap, interpolation='nearest', origin='lower')
+def plot_results(x, y_true, y_pred, name):
+    proj = ccrs.LambertConformal(
+        central_latitude=50,
+        central_longitude=-107,
+        false_easting=5632642.22547,
+        false_northing=4612545.65137,
+        standard_parallels=(50, 50),
+        cutoff=-30
+    )
+    plt.figure(figsize=(16, 8))
+    ax = plt.subplot(1, 2, 1, projection=proj)
+    plot_fronts(x, np.argmax(y_pred, axis=-1), proj, ax)
+    ax = plt.subplot(1, 2, 2, projection=proj)
+    plot_fronts(x, np.argmax(y_true, axis=-1), proj, ax)
+    plt.savefig("plots/{}".name)
     plt.show()
+
+
+def plot_fronts(x, y, proj, ax):
+    with xr.open_dataset("/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomData2/NARR/air.2m.nc") as example:
+        lat = crop_center(crop_2d(example.lat.values), in_size)
+        lon = crop_center(crop_2d(example.lon.values), in_size)
+        lon = (lon + 220) % 360 - 180  # Shift due to problems with crossing dateline in cartopy
+    shift = ccrs.PlateCarree(central_longitude=-40)
+    ax.set_xmargin(0.1)
+    ax.set_ymargin(0.1)
+    ax.set_extent((0, 1.129712e+07, 0, 8959788), crs=proj)
+    plt.contourf(lon, lat, x[..., 0], levels=20, transform=shift)
+    plt.contour(lon, lat, x[..., 1], levels=20, transform=shift)
+    cmap = matplotlib.colors.ListedColormap([(0, 0, 0, 0), 'red', 'blue', 'green', 'purple'])
+    plt.pcolormesh(lon, lat, y, cmap=cmap, zorder=10, transform=shift)
+    ax.coastlines()
+    ax.gridlines(draw_labels=True)
 
 
 train, val = split_dates()
@@ -199,43 +229,26 @@ callbacks = [
     # keras.callbacks.EarlyStopping(patience=20),
     keras.callbacks.TensorBoard(log_dir=logdir)
 ]
-with Dataset(train, files, varnames, truth_filename, 32) as train_dataset, \
-        Dataset(val, files, varnames, truth_filename, 32) as val_dataset:
+with Dataset(train, filename, varnames, truth_filename, 16) as train_dataset, \
+        Dataset(val, filename, varnames, truth_filename, 16) as val_dataset:
+    # from timeit import default_timer as timer
+    # t = timer()
+    # for i in range(100):
+    #     tmp = train_dataset[i]
+    # print((timer() - t) / 100)
     temp_x, temp_y = val_dataset[0]
-    # x_train = np.random.randn(40 * 32, *in_size, 5)
-    # y_train = np.random.randn(40 * 32, *in_size, 5)
-    # for i in range(40):
-    #     print("{} train".format(i))
-    #     x_train[i * 32:(i + 1) * 32], y_train[i * 32:(i + 1) * 32] = train_dataset[i]
-    # x_val = np.random.randn(10 * 32, *in_size, 5)
-    # y_val = np.random.randn(10 * 32, *in_size, 5)
-    # for i in range(10):
-    #     print("{} val".format(i))
-    #     x_val[i * 32:(i + 1) * 32], y_val[i * 32:(i + 1) * 32] = val_dataset[i]
-    # np.savez("/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomLogs/data_ram_fat(FPN).npz", x_train=x_train, y_train=y_train, x_val=x_val, y_val=y_val)
     # deeplab_model.fit_generator(
     #     generator=train_dataset,
     #     validation_data=val_dataset,
     #     use_multiprocessing=False,
     #     verbose=1,
     #     callbacks=callbacks,
-    #     steps_per_epoch=100,
-    #     validation_steps=20,
     #     shuffle=False,
     #     workers=0,
     #     epochs=1000,
     # )
-# print(x_train.shape, y_train.shape)
-# f = np.load("/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomLogs/data_ram.npz")
-# x_train, y_train, x_val, y_val = f["arr_0"], f["arr_1"], f["arr_2"], f["arr_3"]
-# f = np.load("/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomLogs/data_ram(FPN).npz")
-# x_train, y_train, x_val, y_val = f["x_train"], f["y_train"], f["x_val"], f["y_val"]
-# f = np.load("/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomLogs/data_ram_fat(FPN).npz")
-# x_train, y_train, x_val, y_val = f["x_train"], f["y_train"], f["x_val"], f["y_val"]
-# deeplab_model.fit(x=x_train, y=y_train, batch_size=16, epochs=1000, callbacks=callbacks, validation_data=(x_val, y_val))
 
 y_pred = deeplab_model.predict(temp_x)
+
 for i in range(temp_x.shape[0]):
-    plot_fronts(temp_x[i], np.argmax(y_pred[i], axis=-1))
-    plot_fronts(temp_x[i], np.argmax(temp_y[i], axis=-1))
-# plot_fronts(x_train[0], np.argmax(y_train[0], axis=-1))
+    plot_results(temp_x[i], temp_y[i], y_pred[i], i)

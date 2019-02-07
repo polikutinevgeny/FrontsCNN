@@ -1,3 +1,4 @@
+cartopy
 xarray
 matplotlib
 git+https://github.com/qubvel/segmentation_models
