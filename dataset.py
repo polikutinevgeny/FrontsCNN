@@ -6,11 +6,12 @@ import numpy as np
 import xarray as xr
 from keras.utils import to_categorical
 
-from main import normalize, crop_center, crop_boundaries, in_size
+from crop import crop_center, crop_boundaries
+from normalize import normalize
 
 
 class Dataset(keras.utils.Sequence):
-    def __init__(self, dates, filename, varnames, truth_filename, batch_size):
+    def __init__(self, dates, filename, varnames, truth_filename, batch_size, in_size):
         self.dates = dates
         self.filename = filename
         self.varnames = varnames
@@ -20,6 +21,7 @@ class Dataset(keras.utils.Sequence):
         self.batch_size = batch_size
         self.len = int(math.ceil(len(dates) / batch_size))
         self.lock = threading.Lock()
+        self.in_size = in_size
 
     def __enter__(self):
         self.file = xr.open_dataset(self.filename, cache=False)
@@ -44,8 +46,8 @@ class Dataset(keras.utils.Sequence):
                 [np.expand_dims(normalize(v.sel(time=dates), v.name).fillna(0).values, -1) for v in self.variables],
                 axis=-1)
             y = to_categorical(self.truth_variable.sel(time=dates)[:, ::-1, :].values)
-        x = crop_center(crop_boundaries(x), (len(dates), *in_size, 5))
-        y = crop_center(crop_boundaries(y), (len(dates), *in_size, 5))
+        x = crop_center(crop_boundaries(x), (len(dates), *self.in_size, 5))
+        y = crop_center(crop_boundaries(y), (len(dates), *self.in_size, 5))
         return x, y
 
     def on_epoch_end(self):

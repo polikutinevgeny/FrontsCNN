@@ -4,7 +4,8 @@ import xarray as xr
 from cartopy import crs as ccrs
 from matplotlib import pyplot as plt
 
-from main import crop_center, crop_2d, in_size
+from main import in_size
+from crop import crop_center, crop_2d
 
 
 def plot_results(x, y_true, y_pred, name):
