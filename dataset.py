@@ -11,7 +11,7 @@ from normalize import normalize
 
 
 class Dataset(keras.utils.Sequence):
-    def __init__(self, dates, filename, varnames, truth_filename, batch_size, in_size):
+    def __init__(self, dates, filename, varnames, truth_filename, batch_size, in_size, onehot):
         self.dates = dates
         self.filename = filename
         self.varnames = varnames
@@ -22,9 +22,10 @@ class Dataset(keras.utils.Sequence):
         self.len = int(math.ceil(len(dates) / batch_size))
         self.lock = threading.Lock()
         self.in_size = in_size
+        self.onehot = onehot
 
     def __enter__(self):
-        self.file = xr.open_dataset(self.filename, cache=False)
+        self.file = xr.open_dataset(self.filename, cache=False, engine='netcdf4')
         self.variables = []
         for v in self.varnames:
             self.variables.append(self.file[v])
@@ -45,9 +46,16 @@ class Dataset(keras.utils.Sequence):
             x = np.concatenate(
                 [np.expand_dims(normalize(v.sel(time=dates), v.name).fillna(0).values, -1) for v in self.variables],
                 axis=-1)
-            y = to_categorical(self.truth_variable.sel(time=dates)[:, ::-1, :].values)
+            y = self.truth_variable.sel(time=dates)[:, ::-1, :].values
+            if self.onehot:
+                y = to_categorical(y)
+            else:
+                y = np.expand_dims(y, axis=-1)
         x = crop_center(crop_boundaries(x), (len(dates), *self.in_size, 5))
-        y = crop_center(crop_boundaries(y), (len(dates), *self.in_size, 5))
+        if self.onehot:
+            y = crop_center(crop_boundaries(y), (len(dates), *self.in_size, 5))
+        else:
+            y = crop_center(crop_boundaries(y), (len(dates), *self.in_size, 1))
         return x, y
 
     def on_epoch_end(self):
