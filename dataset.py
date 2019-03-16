@@ -11,7 +11,7 @@ from normalize import normalize
 
 
 class Dataset(keras.utils.Sequence):
-    def __init__(self, dates, filename, varnames, truth_filename, batch_size, in_size, onehot):
+    def __init__(self, dates, filename, varnames, truth_filename, batch_size, in_size, onehot, add_mask, mask_model=None):
         self.dates = dates
         self.filename = filename
         self.varnames = varnames
@@ -23,6 +23,8 @@ class Dataset(keras.utils.Sequence):
         self.lock = threading.Lock()
         self.in_size = in_size
         self.onehot = onehot
+        self.add_mask = add_mask
+        self.mask_model = mask_model
 
     def __enter__(self):
         self.file = xr.open_dataset(self.filename, cache=False, engine='netcdf4')
@@ -56,6 +58,12 @@ class Dataset(keras.utils.Sequence):
             y = crop_center(crop_boundaries(y), (len(dates), *self.in_size, 5))
         else:
             y = crop_center(crop_boundaries(y), (len(dates), *self.in_size, 1))
+        if self.add_mask:
+            if self.mask_model:
+                mask = self.mask_model.predict(x)
+                x = np.append(x, mask, axis=-1)
+            else:
+                x = np.append(x, y[..., 1:].sum(axis=-1, keepdims=True), axis=-1)
         return x, y
 
     def on_epoch_end(self):

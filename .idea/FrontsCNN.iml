@@ -4,7 +4,6 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
-    <content url="file://$USER_HOME$/Repositories/keras-deeplab-v3-plus" />
     <orderEntry type="jdk" jdkName="Python 3.7 (FrontsCNN)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
