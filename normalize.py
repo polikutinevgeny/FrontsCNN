@@ -6,7 +6,20 @@ mean_std = {
     'vwnd': (-0.35650038719177246, 4.5172119140625)
 }
 
+min_max = {
+    'air': (210.87310791015625, 323.843994140625),
+    'mslet': (93391.8125, 106889.8125),
+    'shum': (2.4378403740143995e-09, 0.030212288722395897),
+    'uwnd': (-41.54286193847656, 35.221405029296875),
+    'vwnd': (-37.084991455078125, 32.48309326171875)
+}
 
-def normalize(a, name):
+
+def standardize(a, name):
     mean, std = mean_std[name]
     return (a - mean) / std
+
+
+def normalize(a, name):
+    min, max = min_max[name]
+    return (a - min) / (max - min)
