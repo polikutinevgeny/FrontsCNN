@@ -1,43 +1,28 @@
-"""
-Regrids data on lat-lon grid to LCC centered on Russian Far East
+from config import Config
+from dataset import Dataset
+from plot import plot_fronts_far_east
+from utils import trained_models
+import xarray as xr
 
-Use conda with iris and iris-grib to run this file.
-"""
+config = Config(
+    model=trained_models['deeplab'],
+    class_weights=1,
+    in_shape=(256, 256),
+    n_classes=5,
+    varnames=["air", "mslet", "shum", "uwnd", "vwnd"],
+    filename="/mnt/d4dca524-e11f-4923-8fbe-6066e6efd2fd/era5_lcc.nc",
+    truth_filename=None,
+    batch_size=16,
+    binary=False,
+    regularizer=None
+)
 
-from __future__ import (absolute_import, division, print_function)
-from six.moves import (filter, input, map, range, zip)  # noqa
-import iris
-import iris.cube
-from spec_hum import spec_humidity
-
-data = iris.load('/mnt/d4dca524-e11f-4923-8fbe-6066e6efd2fd/era5.nc')
-target = iris.load('example.grib')[0]
-old_cs = iris.coord_systems.GeogCS(iris.fileformats.pp.EARTH_RADIUS)
-new_cs = iris.coord_systems.LambertConformal(central_lat=50, central_lon=130, false_easting=0, false_northing=0, secant_latitudes=(50.0, 50.0), ellipsoid=iris.coord_systems.GeogCS(6371229.0))
-target.coord(axis='x').coord_system = new_cs
-target.coord(axis='y').coord_system = new_cs
-for i in data:
-    i.coord(axis='x').coord_system = old_cs
-    i.coord(axis='y').coord_system = old_cs
-scheme = iris.analysis.Linear(extrapolation_mode='extrapolate')
-reprojected = iris.cube.CubeList([i.regrid(target, scheme) for i in data])
-# Order may change, but there isn't a better version (or I am lazy)
-h = spec_humidity(reprojected[2].data, reprojected[0].data, reprojected[5].data)
-humidity = reprojected[5].copy()
-humidity.data = h
-humidity.units = 'kg/kg'
-del reprojected[5]
-del reprojected[2]
-reprojected.append(humidity)
-names = ['air', 'uwnd', 'vwnd', 'mslet', 'shum']
-for i, n in zip(reprojected, names):
-    i.rename(n)
-iris.save(reprojected, '/mnt/d4dca524-e11f-4923-8fbe-6066e6efd2fd/era5_lcc.nc')
-
-# plt.figure(figsize=(8, 8))
-# iplt.pcolormesh(reprojected[0], norm=plt.Normalize(220, 320))
-# plt.title('Air temperature')
-# ax = plt.gca()
-# ax.coastlines(resolution='50m')
-# ax.gridlines()
-# plt.show()
+with xr.open_dataset(config.filename) as f:
+    dates = f.time.values
+with Dataset(dates, config) as d:
+    x = d[0]
+    dates = d.get_dates(0)
+    result = config.model.predict(x)
+    for i in range(result.shape[0]):
+        plot_fronts_far_east(x[i], result[i], "plots/plots_far_east_drom/deeplab_w{}.png".format(i), config.binary,
+                             config.in_shape, dates[i])

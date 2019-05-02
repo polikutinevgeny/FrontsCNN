@@ -38,7 +38,6 @@ def plot_fronts(x, y, proj, ax, in_size):
     shift = ccrs.PlateCarree(central_longitude=-40)
     ax.set_xmargin(0.1)
     ax.set_ymargin(0.1)
-    # ax.set_extent((0, 1.129712e+07, 0, 8959788), crs=proj)
     ax.set_extent((2.0e+6, 1.039e+07, 6.0e+5, 8959788), crs=proj)
     plt.contourf(lon, lat, x[..., 0], levels=20, transform=shift)
     plt.contour(lon, lat, x[..., 1], levels=20, transform=shift, colors='black', linewidths=0.5)
@@ -54,7 +53,7 @@ def plot_fronts(x, y, proj, ax, in_size):
               prop={'size': 12})
 
 
-def plot_fronts_far_east(x, y, name, onehot, in_size, date):
+def plot_fronts_far_east(x, y, name, onehot, in_size, date, bw=False):
     proj = ccrs.LambertConformal(
         central_latitude=50,
         central_longitude=130,
@@ -75,29 +74,31 @@ def plot_fronts_far_east(x, y, name, onehot, in_size, date):
     ax.set_xmargin(0.1)
     ax.set_ymargin(0.1)
     ax.set_extent((2.0e+6, 1.039e+07, 6.0e+5, 8959788), crs=proj)
-    plt.contourf(lon, lat, x[..., 0], levels=20, transform=shift)
-    cmap = matplotlib.colors.ListedColormap([(0, 0, 0, 0), 'red', 'blue', 'green', 'purple'])
-    plt.pcolormesh(lon, lat, y, cmap=cmap, zorder=10, transform=shift)
-    hot = mpatches.Patch(facecolor='red', label='Тёплый фронт', alpha=1)
-    cold = mpatches.Patch(facecolor='blue', label='Холодный фронт', alpha=1)
-    stat = mpatches.Patch(facecolor='green', label='Стационарный фронт', alpha=1)
-    occl = mpatches.Patch(facecolor='purple', label='Фронт окклюзии', alpha=1)
-    ax.legend(handles=[hot, cold, stat, occl], loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2,
-              prop={'size': 12})
     plt.contour(lon, lat, x[..., 1], levels=20, transform=shift, colors='black', linewidths=0.5)
-    # plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 1), hatch="||||", alpha=0., transform=shift, zorder=100)
-    # plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 2), hatch="----", alpha=0., transform=shift, zorder=100)
-    # plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 3), hatch="oooo", alpha=0., transform=shift, zorder=100)
-    # plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 4), hatch="++++", alpha=0., transform=shift, zorder=100)
-    # hot = mpatches.Patch(facecolor='white', label='Тёплый фронт', hatch="||||", alpha=1)
-    # cold = mpatches.Patch(facecolor='white', label='Холодный фронт', hatch="----", alpha=1)
-    # stat = mpatches.Patch(facecolor='white', label='Стационарный фронт', hatch="oooo", alpha=1)
-    # occl = mpatches.Patch(facecolor='white', label='Фронт окклюзии', hatch="++++", alpha=1)
-    # ax.legend(handles=[hot, cold, stat, occl], loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2, prop={'size': 12})
+    if bw:
+        plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 1), hatch="||||", alpha=0., transform=shift, zorder=100)
+        plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 2), hatch="----", alpha=0., transform=shift, zorder=100)
+        plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 3), hatch="oooo", alpha=0., transform=shift, zorder=100)
+        plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 4), hatch="++++", alpha=0., transform=shift, zorder=100)
+        hot = mpatches.Patch(facecolor='white', label='Тёплый фронт', hatch="||||", alpha=1)
+        cold = mpatches.Patch(facecolor='white', label='Холодный фронт', hatch="----", alpha=1)
+        stat = mpatches.Patch(facecolor='white', label='Стационарный фронт', hatch="oooo", alpha=1)
+        occl = mpatches.Patch(facecolor='white', label='Фронт окклюзии', hatch="++++", alpha=1)
+        ax.legend(handles=[hot, cold, stat, occl], loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2,
+                  prop={'size': 12})
+    else:
+        plt.contourf(lon, lat, x[..., 0], levels=20, transform=shift)
+        cmap = matplotlib.colors.ListedColormap([(0, 0, 0, 0), 'red', 'blue', 'green', 'purple'])
+        plt.pcolormesh(lon, lat, y, cmap=cmap, zorder=10, transform=shift)
+        hot = mpatches.Patch(facecolor='red', label='Тёплый фронт', alpha=1)
+        cold = mpatches.Patch(facecolor='blue', label='Холодный фронт', alpha=1)
+        stat = mpatches.Patch(facecolor='green', label='Стационарный фронт', alpha=1)
+        occl = mpatches.Patch(facecolor='purple', label='Фронт окклюзии', alpha=1)
+        ax.legend(handles=[hot, cold, stat, occl], loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2,
+                  prop={'size': 12})
     ax.coastlines()
     ax.gridlines(draw_labels=True)
     plt.savefig(name)
-    # plt.show()
     plt.close(f)
 
 
@@ -105,5 +106,6 @@ def plot_conf_matrix(y_true, y_pred, binary=False, normalize=True):
     if binary:
         plot_confusion_matrix(y_true, y_pred, ["No front", "Front"], normalize=normalize)
     else:
-        plot_confusion_matrix(y_true, y_pred, ["No front", "Warm", "Cold", "Stationary", "Occlusion"], normalize=normalize)
+        plot_confusion_matrix(y_true, y_pred, ["No front", "Warm", "Cold", "Stationary", "Occlusion"],
+                              normalize=normalize)
     plt.show()
