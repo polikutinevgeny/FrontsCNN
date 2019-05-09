@@ -1,6 +1,7 @@
 import keras.models
 import numpy as np
 from segmentation_models.losses import jaccard_loss
+from segmentation_models.metrics import f_score, jaccard_score
 
 from metrics import iou_metric_all, iou_metric_fronts, iou_metric_hot, iou_metric_cold, iou_metric_stationary, \
     iou_metric_occlusion, iou_metric_binary, weighted_categorical_crossentropy, mixed_loss_gen
@@ -42,11 +43,11 @@ def load_model(model, class_weights=1):
         "iou_metric_stationary": iou_metric_stationary,
         "iou_metric_occlusion": iou_metric_occlusion,
         "iou_metric_binary": iou_metric_binary,
-        "weighted_iou_score": weighted_iou_score,
-        "weighted_f_score": weighted_f_score,
+        "weighted_iou_score": jaccard_score,
+        "weighted_f_score": f_score,
         "loss": weighted_categorical_crossentropy(class_weights),
         "wcce": weighted_categorical_crossentropy(class_weights),
-        "mixed_loss": mixed_loss_gen()
+        "mixed_loss": mixed_loss_gen(class_weights)
     })
 
 

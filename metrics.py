@@ -2,8 +2,6 @@ from keras import backend as K
 from segmentation_models.losses import jaccard_loss
 from segmentation_models.metrics import iou_score
 
-from main import Config
-
 
 def iou_metric_binary(t, p):
     p = K.cast(p > 0.5, K.floatx())
@@ -46,8 +44,8 @@ def weighted_categorical_crossentropy(weights):
     return wcce
 
 
-def mixed_loss_gen():
-    wcce = weighted_categorical_crossentropy(Config.class_weights)
+def mixed_loss_gen(class_weights):
+    wcce = weighted_categorical_crossentropy(class_weights)
 
     def mixed_loss(y_true, y_pred):
         return wcce(y_true, y_pred) * 5 + jaccard_loss(y_true, y_pred)

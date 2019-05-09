@@ -9,13 +9,17 @@ class Config:
         self.model = self.init_model()
 
     def init_model(self):
-        if self.model is str:
+        if isinstance(self.model, str):
             if os.path.isfile(self.model):
                 return Model(
                     file=self.model,
                     binary=self.binary,
                     regularizers=self.regularizers,
-                    class_weights=self.class_weights
+                    class_weights=self.class_weights,
+                    recompile=getattr(self, 'recompile', False),
+                    optimizer=getattr(self, 'optimizer', None),
+                    loss=getattr(self, 'loss', None),
+                    metrics=getattr(self, 'metrics', None)
                 )
             else:
                 self.model = get_model(

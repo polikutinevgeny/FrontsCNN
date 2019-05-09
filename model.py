@@ -4,9 +4,11 @@ from utils import load_model
 
 
 class Model:
-    def __init__(self, file=None, keras_model=None, optimizer=None, loss=None, metrics=None, binary=False, regularizers=None, class_weights=1):
+    def __init__(self, file=None, keras_model=None, optimizer=None, loss=None, metrics=None, binary=False, regularizers=None, class_weights=1, recompile=False):
         if file is not None:
             self.keras_model = load_model(file, class_weights)
+            if recompile:
+                self.keras_model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
         elif keras_model is not None:
             self.keras_model = keras_model
             if self.keras_model.optimizer is None:
@@ -53,10 +55,10 @@ class Model:
         )
 
     def evaluate(self, data, **kwargs):
-        return self.keras_model.evaluate_generator(data, workers=0, use_multiprocessing=False, verbose=1, **kwargs)
+        return self.keras_model.evaluate_generator(data, workers=0, use_multiprocessing=False, **kwargs)
 
     def predict(self, data, **kwargs):
-        result = self.keras_model.predict(data, workers=0, use_multiprocessing=False, verbose=1, **kwargs)
+        result = self.keras_model.predict(data, workers=0, use_multiprocessing=False, **kwargs)
         if self.binary:
             return result[..., 0] > 0.5
         else:
