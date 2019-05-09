@@ -4,9 +4,11 @@ import xarray as xr
 from cartopy import crs as ccrs
 from matplotlib import pyplot as plt
 import matplotlib.patches as mpatches
+
 from confusion_matrix import plot_confusion_matrix
 
 from crop import crop_center, crop_2d
+from main import test_dataset
 
 
 def plot_results(x, y_true, y_pred, name, onehot, in_size, date):
@@ -109,3 +111,41 @@ def plot_conf_matrix(y_true, y_pred, binary=False, normalize=True):
         plot_confusion_matrix(y_true, y_pred, ["No front", "Warm", "Cold", "Stationary", "Occlusion"],
                               normalize=normalize)
     plt.show()
+
+
+def plot_sample(dataset, model, prefix, in_size, binary=False):
+    x, y_true = dataset[0]
+    dates = dataset.get_dates(0)
+    if binary:
+        y_pred = model.predict(x)[..., 0] > 0.5
+        y_true = y_true[..., 0]
+    else:
+        y_pred = model.predict(x, batch_size=1)
+    for i in range(x.shape[0]):
+        plot_results(x[i], y_true[i], y_pred[i], "{}/{}".format(prefix, i), not binary, in_size, dates[i])
+
+
+def plot_filtered(dataset, model, in_size, prefix, filter_func, binary=False):
+    for m, i in zip(dataset, range(len(dataset))):
+        x, y = m
+        r = model.evaluate(x, y, verbose=0)
+        d = test_dataset.get_dates(i)[0]
+        if filter_func(r[1]):
+            pred = model.predict(x)
+            if binary:
+                pred = pred > 0.5
+                y[0] = y[0, ..., 0]
+            plot_results(x[0], y[0], pred[0], "{2}/{0}_{1:.2f}.png".format(i, r[1], prefix), binary, in_size, d)
+
+
+def plot_metrics_histogram(dataset, model, prefix):
+    d = [[] for _ in model.keras_model.metrics_names]
+    for (x, y) in dataset:
+        r = model.evaluate(x, y, verbose=0)
+        for i, j in zip(d, r):
+            i.append(j)
+    for n, i in zip(model.metrics_names, d):
+        plt.hist(i, bins=100)
+        plt.title(n)
+        plt.savefig("{}/{}".format(prefix, n))
+        plt.close()
