@@ -1,19 +1,5 @@
 import operator
 
-# boundaries = {  # on 100 km wide fronts
-#     'min_x': 0,
-#     'max_x': 340,
-#     'min_y': 18,
-#     'max_y': 276,
-# }
-
-# boundaries = {  # on 300 km wide fronts
-#     'min_x': 0,
-#     'max_x': 344,
-#     'min_y': 15,
-#     'max_y': 276,
-# }
-
 boundaries = {  # fronts are more frequent here
     'min_x': 60,
     'max_x': 322,

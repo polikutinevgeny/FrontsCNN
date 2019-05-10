@@ -22,7 +22,7 @@ class Dataset(keras.utils.Sequence):
         self.batch_size = config.batch_size
         self.len = int(math.ceil(len(self.dates) / self.batch_size))
         self.in_size = config.in_shape
-        self.onehot = config.binary
+        self.onehot = not config.binary
 
     def __enter__(self):
         self.file = xr.open_dataset(self.filename, cache=False, engine='netcdf4')

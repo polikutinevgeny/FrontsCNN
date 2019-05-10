@@ -58,7 +58,7 @@ class Model:
         return self.keras_model.evaluate_generator(data, workers=0, use_multiprocessing=False, **kwargs)
 
     def predict(self, data, **kwargs):
-        result = self.keras_model.predict(data, workers=0, use_multiprocessing=False, **kwargs)
+        result = self.keras_model.predict(data, **kwargs)
         if self.binary:
             return result[..., 0] > 0.5
         else:
