@@ -6,7 +6,8 @@ from model_zoo import get_model
 class Config:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
-        self.model = self.init_model()
+        if getattr(self, 'model', False):
+            self.model = self.init_model()
 
     def init_model(self):
         if isinstance(self.model, str):

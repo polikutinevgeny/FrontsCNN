@@ -23,6 +23,7 @@ class Dataset(keras.utils.Sequence):
         self.len = int(math.ceil(len(self.dates) / self.batch_size))
         self.in_size = config.in_shape
         self.onehot = not config.binary
+        self.standardize = config.standardize
 
     def __enter__(self):
         self.file = xr.open_dataset(self.filename, cache=False, engine='netcdf4')
@@ -54,9 +55,15 @@ class Dataset(keras.utils.Sequence):
     def __getitem__(self, index):
         dates = self.get_dates(index)
         x = np.concatenate(
-            [np.expand_dims(standardize(v.sel(time=dates), v.name).fillna(0).values, -1) for v in self.variables],
+            [
+                np.expand_dims((standardize(v.sel(time=dates), v.name) if self.standardize else v.sel(time=dates))
+                               .fillna(0).values, -1)
+                for v in self.variables
+            ],
             axis=-1)
-        x = crop_center(crop_boundaries(x), (len(dates), *self.in_size, 5))
+        if x.ndim == 5:
+            x = x.squeeze(axis=1)
+        x = crop_center(crop_boundaries(x), (len(dates), *self.in_size, len(self.varnames)))
         if self.truth_filename:
             y = self.truth_variable.sel(time=dates)[:, ::-1, :].values
             if self.onehot:

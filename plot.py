@@ -10,7 +10,7 @@ from confusion_matrix import plot_confusion_matrix
 from crop import crop_center, crop_2d
 
 
-def plot_results(x, y_true, y_pred, name, in_size, date):
+def plot_results(x, y_true, y_pred, name, in_size, date, bw=False, binary=False):
     proj = ccrs.LambertConformal(
         central_latitude=50,
         central_longitude=-107,
@@ -23,15 +23,15 @@ def plot_results(x, y_true, y_pred, name, in_size, date):
     f.suptitle("Fronts at {}".format(date), fontsize=16)
     ax = plt.subplot(1, 2, 1, projection=proj)
     ax.set_title("Prediction")
-    plot_fronts(x, y_pred, proj, ax, in_size)
+    plot_fronts(x, y_pred, proj, ax, in_size, bw, binary)
     ax = plt.subplot(1, 2, 2, projection=proj)
     ax.set_title("Ground truth")
-    plot_fronts(x, y_true, proj, ax, in_size)
+    plot_fronts(x, y_true, proj, ax, in_size, bw, binary)
     plt.savefig(name)
     plt.close(f)
 
 
-def plot_fronts(x, y, proj, ax, in_size):
+def plot_fronts(x, y, proj, ax, in_size, bw=False, binary=False):
     with xr.open_dataset("/mnt/ldm_vol_DESKTOP-DSIGH25-Dg0_Volume1/DiplomData2/NARR/air.2m.nc") as example:
         lat = crop_center(crop_2d(example.lat.values), in_size)
         lon = crop_center(crop_2d(example.lon.values), in_size)
@@ -40,18 +40,48 @@ def plot_fronts(x, y, proj, ax, in_size):
     ax.set_xmargin(0.1)
     ax.set_ymargin(0.1)
     ax.set_extent((2.0e+6, 1.039e+07, 6.0e+5, 8959788), crs=proj)
-    plt.contourf(lon, lat, x[..., 0], levels=20, transform=shift)
-    plt.contour(lon, lat, x[..., 1], levels=20, transform=shift, colors='black', linewidths=0.5)
-    cmap = matplotlib.colors.ListedColormap([(0, 0, 0, 0), 'red', 'blue', 'green', 'purple'])
-    plt.pcolormesh(lon, lat, y, cmap=cmap, zorder=10, transform=shift)
+    if x.ndim == 3:
+        plt.contour(lon, lat, x[..., 1], levels=20, transform=shift, colors='black', linewidths=0.5)
+    if bw:
+        if binary:
+            cmap = matplotlib.colors.ListedColormap([(0, 0, 0, 0), 'black'])
+            plt.pcolormesh(lon, lat, y, cmap=cmap, zorder=10, transform=shift)
+        else:
+            plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 1), hatch="||||", alpha=0., transform=shift, zorder=100)
+            plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 2), hatch="----", alpha=0., transform=shift, zorder=100)
+            plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 3), hatch="oooo", alpha=0., transform=shift, zorder=100)
+            plt.pcolor(lon, lat, np.ma.masked_not_equal(y, 4), hatch="++++", alpha=0., transform=shift, zorder=100)
+            hot = mpatches.Patch(facecolor='white', label='Тёплый фронт', hatch="||||", alpha=1)
+            cold = mpatches.Patch(facecolor='white', label='Холодный фронт', hatch="----", alpha=1)
+            stat = mpatches.Patch(facecolor='white', label='Стационарный фронт', hatch="oooo", alpha=1)
+            occl = mpatches.Patch(facecolor='white', label='Фронт окклюзии', hatch="++++", alpha=1)
+            ax.legend(handles=[hot, cold, stat, occl], loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2,
+                      prop={'size': 12})
+    else:
+        if x.ndim == 3:
+            plt.contourf(lon, lat, x[..., 0], levels=20, transform=shift)
+        else:
+            plt.contourf(lon, lat, x, levels=20, transform=shift)
+        if binary:
+            cmap = matplotlib.colors.ListedColormap([(0, 0, 0, 0), 'black'])
+            plt.pcolormesh(lon, lat, y, cmap=cmap, zorder=10, transform=shift)
+        else:
+            cmap = matplotlib.colors.ListedColormap([(0, 0, 0, 0), 'red', 'blue', 'green', 'purple'])
+            plt.pcolormesh(lon, lat, y, cmap=cmap, zorder=10, transform=shift)
+            hot = mpatches.Patch(facecolor='red', label='Тёплый фронт', alpha=1)
+            cold = mpatches.Patch(facecolor='blue', label='Холодный фронт', alpha=1)
+            stat = mpatches.Patch(facecolor='green', label='Стационарный фронт', alpha=1)
+            occl = mpatches.Patch(facecolor='purple', label='Фронт окклюзии', alpha=1)
+            ax.legend(handles=[hot, cold, stat, occl], loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2,
+                      prop={'size': 12})
     ax.coastlines()
     ax.gridlines(draw_labels=True)
-    hot = mpatches.Patch(facecolor='red', label='Тёплый фронт', alpha=1)
-    cold = mpatches.Patch(facecolor='blue', label='Холодный фронт', alpha=1)
-    stat = mpatches.Patch(facecolor='green', label='Стационарный фронт', alpha=1)
-    occl = mpatches.Patch(facecolor='purple', label='Фронт окклюзии', alpha=1)
-    ax.legend(handles=[hot, cold, stat, occl], loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2,
-              prop={'size': 12})
+    # hot = mpatches.Patch(facecolor='red', label='Тёплый фронт', alpha=1)
+    # cold = mpatches.Patch(facecolor='blue', label='Холодный фронт', alpha=1)
+    # stat = mpatches.Patch(facecolor='green', label='Стационарный фронт', alpha=1)
+    # occl = mpatches.Patch(facecolor='purple', label='Фронт окклюзии', alpha=1)
+    # ax.legend(handles=[hot, cold, stat, occl], loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2,
+    #           prop={'size': 12})
 
 
 def plot_fronts_far_east(x, y, name, onehot, in_size, date, bw=False):
@@ -103,12 +133,12 @@ def plot_fronts_far_east(x, y, name, onehot, in_size, date, bw=False):
     plt.close(f)
 
 
-def plot_conf_matrix(y_true, y_pred, filename, binary=False, normalize=True, title=None):
+def plot_conf_matrix(y_true, y_pred, filename, binary=False, normalize=True, title=None, cmap='Greys'):
     if binary:
-        plot_confusion_matrix(y_true, y_pred, ["Нет фронта", "Фронт"], normalize=normalize, title=title)
+        plot_confusion_matrix(y_true, y_pred, ["Нет фронта", "Фронт"], normalize=normalize, title=title, cmap=cmap)
     else:
         plot_confusion_matrix(y_true, y_pred, ["Нет фронта", "Тёплый", "Холодный", "Стационарный", "Окклюзии"],
-                              normalize=normalize, title=title)
+                              normalize=normalize, title=title, cmap=cmap)
     plt.savefig(filename)
     plt.close()
 

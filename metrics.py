@@ -8,6 +8,12 @@ def iou_metric_binary(t, p):
     return iou_score(t, p)
 
 
+def iou_metric_forced_binary(t, p):
+    p = K.cast(K.argmax(p, axis=-1) > 0, K.floatx())
+    t = K.cast(K.argmax(t, axis=-1) > 0, K.floatx())
+    return iou_score(t, p)
+
+
 def iou_metric_all(t, p):
     return iou_score(t, K.one_hot(K.argmax(p, axis=-1), 5))
 
